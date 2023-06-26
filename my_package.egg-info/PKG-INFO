@@ -1,0 +1,10 @@
+Metadata-Version: 2.1
+Name: my-package
+Version: 0.1.0
+Summary: A short description of your project
+Home-page: https://github.com/yourusername/my_package
+Author: Your Name
+Author-email: youremail@example.com
+Description-Content-Type: text/markdown
+
+Description

@@ -2,6 +2,14 @@ import torch
 import numpy as np
 from .wrapper import wrapper_data_trans
 
+@wrapper_data_trans
+def tensor_to_type(tensor, dtype):
+    return tensor.to(dtype)
+
+@wrapper_data_trans
+def ndarray_to_type(arr, dtype):
+    return arr.astype(dtype)
+
 
 
 @wrapper_data_trans
@@ -47,4 +55,13 @@ def transpose(data):
     assert len(data.shape) == 2
     return data.T
 
+if __name__=="__main__":
+    a = torch.rand(100, 20)
+    print(tensor_to_type([a, a], torch.float16)) 
 
+    b = np.random.rand(10, 20)
+    print(ndarray_to_type([b, b], np.float128))
+
+"""
+python -m ColaUtils.torchnp_utils
+"""

@@ -1,8 +1,9 @@
 import open3d as o3d
+
 import numpy as np
 
 def fpfh(keypts, downsample):
-    """ 输入两个 PCD, 输出keypts的FPFH特征
+    """ 输入pcd, 输出keypts的FPFH特征
     Returns:
         (N, 33) 单位化 & ndarray
     """

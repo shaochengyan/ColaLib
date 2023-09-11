@@ -22,7 +22,7 @@ class DatasetSaveLoader:
     def __init__(self, dir_save) -> None:
         if not os.path.exists(dir_save):
             os.makedirs(dir_save)
-        self.filebase = "/{:06d}_{}.npy"
+        self.dir_save = dir_save
         self.filebase = os.path.join(dir_save, "{:06d}_{}")
     
     def save(self, idx, name, data):
@@ -38,6 +38,19 @@ class DatasetSaveLoader:
         filename = self.filebase.format(idx, name)
         np.save(filename, data, allow_pickle=True)
 
+    def find_data_number(self):
+        """
+        1. load all filename -> check idx 
+        """
+        filenames = os.listdir(self.dir_save)
+        num = 0
+        for fn in filenames:
+            idx = int(fn[:6]) + 1
+            if num < idx:
+                num = idx
+
+        return num
+
     def load(self, idx, name):
         """
         name: file name of .npy file, e.g usip_kpts.npy
@@ -45,25 +58,60 @@ class DatasetSaveLoader:
 
         file = self.filebase.format(idx, name) + ".npy"
         data = np.load(file, allow_pickle=True)
+        if data.dtype == np.dtype("O"):
+            data = data.tolist()
         return data
+    
+    def is_exist(self, idx, name):
+        file = self.filebase.format(idx, name) + ".npy"
+        return os.path.isfile(file)
 
-    def loadall(self, idx):
+    def loadall_idx(self, idx):
         """ load all data of idx, return a dotmap
         """
         filepattern = self.filebase.format(idx, "*")
+        repattern = r"/\d{6}_(.+)\."
+        return self.loadall(filepattern, repattern)
+    
+    def loadall_cls(self, cls):
+        """根据数据类型名来提取全部"""
+        filepattern = os.path.join(self.dir_save, "{}_{}.npy".format("*", cls)) 
+        repattern = r"/(\d+)_\w+"
+        return self.loadall(filepattern, repattern)
+    
+    def save_with_name(self, name, data):
+        if isinstance(data, (list, tuple)):
+            data = np.asarray(data, dtype=object)
+        
+        # save
+        filename = os.path.join(self.dir_save, name)
+        np.save(filename, data, allow_pickle=True) 
+    
+    def load_with_name(self, name):
+        filename = os.path.join(self.dir_save, name+".npy")
+        data = np.load(filename, allow_pickle=True) 
+        # if data.dtype is np.ndarray: 
+        if data.dtype == np.dtype("O"):
+            data = data.tolist()
+        return data
+    
+   
+    def loadall(self, filepattern, repattern):
         file_list = glob.glob(filepattern) 
 
         dataall = dict()
         for file in file_list:
-            name = re.findall(r"/\d{6}_(.+)\.", file)[0]
+            name = re.findall(repattern, file)[0]
             data = np.load(file, allow_pickle=True) 
             
-            if data.dtype is np.ndarray: 
+            # if data.dtype is np.ndarray: 
+            if data.dtype == np.dtype("O"):
                 data = data.tolist()
 
             dataall[name] = data
         
         return DotMap(dataall)
+ 
 
 
 def test_DatasetSaveLoader():
@@ -80,9 +128,17 @@ def test_DatasetSaveLoader():
     rslt = dataloader.load(1, "A") 
     print(rslt)
 
-    rslt = dataloader.loadall(1) 
+    rslt = dataloader.loadall_idx(1) 
     print(rslt.A, rslt.B)
+
+    rslt = dataloader.loadall_cls("A")
+    pass
 
 
 if __name__=="__main__":
     test_DatasetSaveLoader()
+
+
+"""
+python -m ColaUtils.data_saveload_utils
+"""

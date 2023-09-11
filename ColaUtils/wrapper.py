@@ -11,11 +11,11 @@ def wrapper_data_trans(trans):
     """
     原本对f(a)->b: 转为 [a1, a2] -> [b1, b2] 同时也支持tuple
     """
-    def trans_all(obj, **kwargs):
+    def trans_all(obj, *args, **kwargs):
         if isinstance(obj, (tuple, list)):
-            return [ trans(item, **kwargs) for item in obj ]
+            return [ trans(item, *args, **kwargs) for item in obj ]
         else:
-            return trans(obj, **kwargs)
+            return trans(obj, *args, **kwargs)
     return trans_all
 
 @wrapper_ignore_error

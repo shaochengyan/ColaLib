@@ -35,7 +35,7 @@
 - `Logger` 对于某个日志(name指定文件名), 将其存储到 log_dir 下
 
 ## [data_saveload_utils](ColaUtils/data_saveload_utils.py)
-- `DatasetSaveLoader` 在指定文件夹下存储某一类文件, 每一类文件下有多个(通过idx来区分),支持加载某个文件或指定idx的全部类别文
+- `DatasetSaveLoader` 在指定文件夹下存储某一类文件, 每一类文件下有多个(通过idx来区分),支持加载某个文件或指定idx的全部类别文OR某种类别的全部数据
 
 ## [sequence_utils](./ColaUtils/sequence_utils.py)
 > - 在序列上处理的函数

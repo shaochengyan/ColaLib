@@ -1,6 +1,6 @@
 import time
 import numpy as np
-import PCLKeypoint as pcl
+import PCLKeypoint as pcl 
 
 """
 https://github.com/lijx10/PCLKeypoints.git
@@ -12,11 +12,13 @@ install PCLKeypoint
 
 def run_fpfh33(points:np.ndarray, keypoints, compute_normal_k=10, feature_radius=1.0):
     """
+    NOTE: feature_radius 过小会导致描述符计算为0 
     points: Nx3
     Keypoints: Mx3
     compute_noraml_k: int
     feature_radius: float
     return: ndarray M x 33
+
     """
     assert points.ndim == 2 and points.shape[1] == 3
     assert keypoints.ndim == 2 and keypoints.shape[1] == 3 

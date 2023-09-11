@@ -8,7 +8,8 @@
             "name": "Python: Module",
             "type": "python",
             "request": "launch",
-            "module": "ColaDatasets.kitti_loader_gp",
+            // "module": "ColaUtils.data_saveload_utils",
+            "module": "ColaPCRModules.AdvancePCR.maxcliques",
             "justMyCode": true
         }
     ]

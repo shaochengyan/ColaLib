@@ -2,8 +2,10 @@ import numpy as np
 import torch
 import ColaOpen3D as o4d
 import open3d as o3d
+import copy
 
 from .o3d_utils import pcd_to_ndarray
+from .torchnp_utils import tensor_to_type 
 
 def integrate_trans(R, t):
     """ (R, t) -> trans
@@ -40,12 +42,13 @@ def transform(pts, trans):
     Output
         - trans_pts: [num_points, dim] or [bs, num_points, dim]
     """
+    einsum = torch.einsum if isinstance(pts, torch.Tensor) else np.einsum
     if len(pts.shape) == 3:
-        trans_pts = torch.einsum('bnm,bmk->bnk', trans[:, :3, :3],
-                                 pts.permute(0, 2, 1)) + trans[:, :3, 3:4]  
-        return trans_pts.permute(0, 2, 1)
+        trans_pts = einsum('bnm,bkm->bkn', trans[:, :3, :3],
+                                 pts) + trans[:, :3, 3:4].reshape(-1, 1, 3)  # (bs, num_point, 3)  
+        return trans_pts
     else:
-        trans_pts = torch.einsum('nm,mk->nk', trans[:3, :3],
+        trans_pts = einsum('nm,mk->nk', trans[:3, :3],
                                  pts.T) + trans[:3, 3:4]
         return trans_pts.T
 
@@ -60,6 +63,8 @@ def rigid_transform_3d(A, B, weights=None, weight_threshold=0):
     Output:
         - R, t
     """
+    A, B = tensor_to_type([A, B], torch.float32)
+
     bs = A.shape[0]
     if weights is None:
         weights = torch.ones_like(A[:, :, 0])
@@ -148,7 +153,7 @@ def transformation_error(pred_trans, gt_trans):
     return RE, TE
 
 
-def visualization_2phase(src_pcd, tgt_pcd, pred_trans):
+def visualization_2phase(src_pcd, tgt_pcd, pred_trans, is_coloring=True, is_pass_first=True):
     """vis origin and after trans
     NOTE: press k will change background color
     """
@@ -161,18 +166,23 @@ def visualization_2phase(src_pcd, tgt_pcd, pred_trans):
     if not src_pcd.has_normals():
         estimate_normal(src_pcd)
         estimate_normal(tgt_pcd)
-    src_pcd.paint_uniform_color([1, 0.706, 0])
-    tgt_pcd.paint_uniform_color([0, 0.651, 0.929])
-    o3d.visualization.draw_geometries_with_key_callbacks([src_pcd, tgt_pcd], key_to_callback)
+    if is_coloring:
+        src_pcd.paint_uniform_color([1, 0.706, 0])
+        tgt_pcd.paint_uniform_color([0, 0.651, 0.929])
+    if not is_pass_first:
+        o3d.visualization.draw_geometries_with_key_callbacks([src_pcd, tgt_pcd], key_to_callback)
+    src_pcd = copy.deepcopy(src_pcd)
     src_pcd.transform(pred_trans)
     o3d.visualization.draw_geometries_with_key_callbacks([src_pcd, tgt_pcd], key_to_callback)
+
 
 def create_corr_via_descriptor_sample(src_desc, tgt_desc):
     """ 直接计算各个描述符之间的距离然后返回匹配对下标
     input: (N, dim) (M, dim) ndarray
     return corr ndarray (N, 2) int
     """
-    distance = np.sqrt(2 - 2 * (src_desc @ tgt_desc.T) + 1e-6)  # DONE:计算单位向量之间的欧氏距离 
+    # distance = np.sqrt(2 - 2 * (src_desc @ tgt_desc.T) + 1e-6)  # DONE:计算单位向量之间的欧氏距离 
+    distance = np.sqrt(np.sum((src_desc[:, None, :] - tgt_desc[None, :, :]) ** 2, axis=-1))
     source_idx = np.argmin(distance, axis=1)  # for each row save the index of minimun
     # feature matching
     corr = np.concatenate([np.arange(source_idx.shape[0])[:, None], source_idx[:, None]],
@@ -228,40 +238,20 @@ def downsample_fps_batch(pts, n_node):
 
 
 # 计算匹配对的正确匹配率
-def calculate_right_correspondence_mask(kpts_src, kpts_dst, corres, radiu, R, shift):
+def calculate_right_correspondence_mask(kpts_src, kpts_dst, radiu, trans, R=None, shift=None):
     """
     给定匹配关系和正确变换 -> 正确匹配对的mask
-    kpts_src: ndarray Nx3
-    kpts_dst: ndarray Mx3
+    kpts_src: ndarray Nx3 or batch
+    kpts_dst: ndarray Mx3 or batch
     corres: Kx2 int ndarray
     radiu: float 
     R: ndarray 3x3
     shift: ndarray (3,)
     return: float [0, 1] 匹配对的正确匹配率
     """
-    K = len(corres)
-    pts_src = kpts_src[corres[:, 0], :]
-    pts_dst = kpts_dst[corres[:, 1], :]
-
-    pts_src_transformed = pts_src @ R.T + shift
-
-    dis = np.linalg.norm(pts_src_transformed - pts_dst, axis=1)  # (K,)
+    src_pts_trans = transform(kpts_src, trans)
+    dis = np.linalg.norm(src_pts_trans - kpts_dst, axis=-1)  # (N,) or (bs, N)
     mask = dis < radiu
 
     return mask
-
-def calculate_right_correspondences_rate(kpts_src, kpts_dst, corres, radiu, R, shift):
-    """
-    计算正确匹配率
-    kpts_src: ndarray Nx3
-    kpts_dst: ndarray Mx3
-    corres: Kx2 int ndarray
-    radiu: float 
-    R: ndarray 3x3
-    shift: ndarray (3,)
-    return: float [0, 1] 匹配对的正确匹配率
-    """
-    mask = calculate_right_correspondence_mask(kpts_src, kpts_dst, corres, radiu, R, shift)
-
-    return np.sum(mask) / float(len(corres)), np.sum(mask)
 

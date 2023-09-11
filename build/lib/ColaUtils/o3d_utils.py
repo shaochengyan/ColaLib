@@ -1,9 +1,10 @@
 import numpy as np
 import open3d as o3d
 
-import ColaOpen3D as o4d
 from ColaUtils.torchnp_utils import tensor_to_ndarray
 from ColaUtils.wrapper import wrapper_data_trans
+
+
 
 @wrapper_data_trans
 def ndarray_to_pcd(pts):
@@ -43,3 +44,71 @@ def pcd_to_ndarray(pcd):
 @wrapper_data_trans
 def feature_to_ndarray(feature):
     return np.asarray(feature.data)
+
+
+import numpy as np
+import torch
+import ColaOpen3D as o4d
+import open3d as o3d
+from ColaUtils.wrapper import wrapper_data_trans
+
+
+@wrapper_data_trans
+def trans_to_array_tensor(data):
+    return PCDArrayTensor(data)
+
+"""
+For convinient convert pcd and ndarray and tensor 
+"""
+class PCDArrayTensor(np.ndarray):
+    def __new__(cls, input_array):
+        """
+        input: o3d/o4d.PointCloud | ndarray |  Tensor 
+        """
+        if isinstance(input_array, o4d.geometry.ColaPointCloud):
+            obj = input_array.arr
+        elif isinstance(input_array, o3d.geometry.PointCloud):
+            obj = np.asarray(input_array.points)
+        elif isinstance(input_array, torch.Tensor):
+            obj = input_array.numpy()
+        else:
+            obj = np.asarray(input_array).view(cls)
+        return obj
+
+    def __array_finalize__(self, obj):
+        if obj is None:
+            return
+        
+        self.tensor = torch.from_numpy(obj)
+        self.arr = np.asarray(self)
+        self.create_pcd()
+    
+    # cola do
+    def create_pcd(self):
+        """
+        return ColaPointCloud
+        """
+        self.pcd = o4d.geometry.ColaPointCloud(self)
+
+
+if __name__=="__main__":  
+    a = ArrayTensor([1, 2, 3.1])
+    print(a)
+    # 使用示例
+    arr = np.array([1, 2, 3])
+    arr2 = ArrayTensor(arr)
+
+    arr[0] = -222
+    print(arr)
+    print(arr2)
+    print(type(arr2))
+    print(arr2.dtype)
+    print(arr2.tensor)
+
+    arr[1] = 100 
+    print(arr2.arr)
+    print(arr2)
+
+"""
+python -m ColaDType.numpy_tensor
+"""

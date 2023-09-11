@@ -1,8 +1,10 @@
 import open3d
 import numpy
-import ColaOpen3D as o4d
+import torch
+from .KDTreeFlann import KDTreeFlann
 
-
+from ColaUtils import pcdvis_utils
+from ColaUtils.sequence_utils import normalize
 """
 http://www.open3d.org/docs/release/python_api/open3d.geometry.PointCloud.html
 """
@@ -34,31 +36,86 @@ class ColaPointCloud():
                 self.data = open3d.geometry.PointCloud()
         else:
             self.data = open3d.geometry.PointCloud()
+        
+        # array
+        self.init_torchnp()
 
     """
     Cola do
     """
     def cola_init_points(self, arr):
         """
+        用 arr 来初始化点, 此时是深度拷贝
         arr: ndarray float (N, 2|3)
         """
         self.data.points = open3d.utility.Vector3dVector(arr)
+        self.init_torchnp()
+    
+    def cola_resort_point(self, idx_new):
+        """
+        idx_new: ndarray (N, ) int
+        """
+        assert len(idx_new) == len(self.arr)
+        self.arr[:, :] = self.arr[idx_new, :]
 
-    def cola_get_ndarray_points(self):
-        return numpy.asarray(self.data.points)
+    def init_torchnp(self):
+        self.arr = numpy.asarray(self.data.points)
+        self.tensor = torch.from_numpy(self.arr)
+        self.normals = None
 
     def cola_set_colors(self, arr):
         """
         arr: list | ndarray
         """
-        return o4d.o4d_vis.set_geometry_color(self.data, arr)
+        return pcdvis_utils.set_geometry_color(self.data, arr)
 
-    def cola_get_size(self):
-        return len(self.data.points)
+    def __len__(self):
+        """
+        return number of point (int)
+        """
+        return len(self.arr)
 
+    def cola_set_color_with_label(self, label, color_map=None):
+        """
+        label: ndarray (N, ) or list of it
+        color_map: dict label as key, color rgb as value, label:[r, g, b]
+        """
+        pcdvis_utils.set_pcd_with_semantic_label(self.data, label=label, cmap=color_map) 
+
+    def cola_change_points_value(self, idx_start, idx_end, arr):
+        """
+        idx_start, idx_end: int, <
+        arr: ndarray
+        """
+        self.arr[idx_start:idx_end, :] = arr
+
+    def estimate_normals_from_other(self, pcd, radius=0.1, max_nn=30, fast_normal_computation=True):
+        """
+        input: pcd ColaPointCloud
+        从pts中估计法向: 先计算pts的法向 -> 在pts中搜搜距离this pcd 的点最近的k个点 -> 平均作为该点的法向
+        NOTE: 由于需要计算pts的全部点 -> 不适合大量使用, PCL中有直接从另一个点云中计算法向的函数
+        """
+        pcd.estimate_normals(radius=radius, max_nn=max_nn, fast_normal_computation=fast_normal_computation)
+        tree = KDTreeFlann()
+        tree.set_geometry(pcd.data)
+        normals = numpy.zeros_like(self.arr)
+        for i, query in enumerate(self.arr):
+            [_, idx, _] = tree.search_knn_vector_3d(query, knn=3)
+            normals[i] = normalize(numpy.sum(pcd.normals[idx], axis=0))
+        self.normals = normals
+    
     """
     Some compute function
     """
+    def estimate_normals(self, radius=0.1, max_nn=30, fast_normal_computation=True):
+        """
+        For pcd.normals (ndarray Nx3)
+        """
+        self.data.estimate_normals(
+            open3d.geometry.KDTreeSearchParamHybrid(radius=radius, max_nn=max_nn)
+        )
+        self.normals = numpy.asarray(self.data.normals)
+    
 
     """
     Others
@@ -78,7 +135,7 @@ class ColaPointCloud():
         color (numpy.ndarray[numpy.float64[3, 1]]) RGB color for the PointCloud.
         """
         if not isinstance(color, numpy.ndarray):
-            color = numpy.asarray(color).reshape(-1, 1)[:3, 1]
+            color = numpy.asarray(color).reshape(-1, 1)[:3, 0]
         return self.data.paint_uniform_color(color)
 
     """
@@ -87,7 +144,8 @@ class ColaPointCloud():
     def farthest_point_down_sample(self, num_samples:int):
         """ FPS 采样
         """
-        return self.data.farthest_point_down_sample(num_samples)
+        pcd = self.data.farthest_point_down_sample(num_samples)
+        return ColaPointCloud(pcd)
 
     def random_down_sample(self, sampling_ratio):
         """ 产生随机采样下标 -> 随机降采样
@@ -99,7 +157,8 @@ class ColaPointCloud():
     def voxel_down_sample(self, voxel_size):
         """ 体素降采样: 给定体素大小进行体素降采样, norams/colors将会取平均
         """
-        return self.data.voxel_down_sample(voxel_size)
+        pcd = self.data.voxel_down_sample(voxel_size)
+        return ColaPointCloud(pcd)
 
     def remove_non_finite_points(self, remove_nan=True, remove_infinite=True):
         """ remove nan entry, or infinite entries, and  associated with the non-finite point such as normals

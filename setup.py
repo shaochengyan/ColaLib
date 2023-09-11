@@ -11,11 +11,13 @@ setup(
     long_description_content_type='text/markdown',
     url='https://github.com/yourusername/my_package',
     # 下面是几个案例
-    packages=find_packages()),  # 该项目下所有包
+    packages=find_packages(include=["ColaPCRModules*", "ColaOpen3D*", "ColaDatasets*", "ColaUtils*"])  # 该项目下所有包
+)  
 
 
 """
 python cola_setup.py bdist_wheel
 cd dist
-pip install ...
+pip install ..
+
 """

@@ -81,6 +81,9 @@ def set_geometry_color(geo, color_arr):
     color_arr: ndarray
         - (N, 3) for PCD N points
         - (3, ) for uniform color 
+    example:
+        - dst_pcd.cola_set_colors(np.asarray([67,200,117]) / 255.0)
+        - src_pcd.cola_set_colors(np.asarray([137,117,221]) / 255.0)
     """
     if not isinstance(color_arr, np.ndarray):
         color_arr = np.asarray(color_arr)
@@ -184,7 +187,7 @@ def set_pcd_with_semantic_label(pcd, label, is_vis=False, cmap=None):
         _label = label[idx_pcd]
         _pcd = o4d.geometry.ColaPointCloud(pcd[idx_pcd])
         N = _label.shape[0]
-        assert N == _pcd.cola_get_size()
+        assert N == len(_pcd)
 
         # color
         color = np.zeros(shape=(N, 3), dtype=np.float32)
@@ -227,6 +230,26 @@ def get_corres_lines(kpts_src, kpts_dst, corres, is_show=False):
     return lines
 
 
+def voxel_downsample_with_label(pts, labels, voxel_size):
+    """
+    pts: Nx3 ndarray
+    labels: Nx1  ndarray
+    """
+    pcd = o4d.geometry.ColaPointCloud(pts)
+    tree = o4d.geometry.KDTreeFlann(pcd.data)
+
+    pcd_down = pcd.voxel_down_sample(voxel_size=voxel_size)
+    
+    # get label
+    pts_down = np.asarray(pcd_down.arr)
+    labels_down = np.zeros(len(pts_down), dtype=np.int32)
+    for i, query in enumerate(pts_down):
+        query = query.reshape(3, -1)
+        idx = tree.search_knn_vector_3d(query=query, knn=1)[1][0]
+        labels_down[i] = labels[idx]
+    
+    return pts_down, labels_down   
+        
 
 if __name__=="__main__":
     import ColaOpen3D as o4d

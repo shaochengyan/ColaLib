@@ -64,12 +64,12 @@ class VisDynamic:
         self.vis.destroy_window()
     
 
-def vis_geo_static(pcd_list, window_name="Open3D", width=800, height=600, left=50, top=50, point_show_normal=False, mesh_show_wireframe=False, mesh_show_back_face=False):
+def vis_geo_static(*pcd_list, window_name="Open3D", width=800, height=600, left=50, top=50, point_show_normal=False, mesh_show_wireframe=False, mesh_show_back_face=False):
     """ visualize geometry
     可视化静态几何体
     pcd_list: list of geometry
     """
-    o4d.visualization.draw_geometries(pcd_list, window_name="Open3D", width=width, height=height, left=left, top=top, point_show_normal=point_show_normal, mesh_show_wireframe=mesh_show_wireframe, mesh_show_back_face=mesh_show_back_face)
+    o4d.visualization.draw_geometries(pcd_list, window_name=window_name, width=width, height=height, left=left, top=top, point_show_normal=point_show_normal, mesh_show_wireframe=mesh_show_wireframe, mesh_show_back_face=mesh_show_back_face)
 
 
 
@@ -93,79 +93,6 @@ def set_geometry_color(geo, color_arr):
         geo.colors = o4d.utility.Vector3dVector(color_arr)
     return True
 
-
-kitti_semantic_cmap = {
-    0 : [0, 0, 0], 
-    1 : [0, 0, 255], 
-    10: [245, 150, 100], 
-    11: [245, 230, 100], 
-    13: [250, 80, 100], 
-    15: [150, 60, 30], 
-    16: [255, 0, 0], 
-    18: [180, 30, 80], 
-    20: [255, 0, 0], 
-    30: [30, 30, 255], 
-    31: [200, 40, 255], 
-    32: [90, 30, 150], 
-    40: [255, 0, 255], 
-    44: [255, 150, 255], 
-    48: [75, 0, 75], 
-    49: [75, 0, 175], 
-    50: [0, 200, 255], 
-    51: [50, 120, 255], 
-    52: [0, 150, 255], 
-    60: [170, 255, 150], 
-    70: [0, 175, 0], 
-    71: [0, 60, 135], 
-    72: [80, 240, 150], 
-    80: [150, 240, 255], 
-    81: [0, 0, 255], 
-    99: [255, 255, 50], 
-    252: [245, 150, 100], 
-    256: [255, 0, 0], 
-    253: [200, 40, 255], 
-    254: [30, 30, 255], 
-    255: [90, 30, 150], 
-    257: [250, 80, 100], 
-    258: [180, 30, 80], 
-    259: [255, 0, 0]
-}
-kitti_semantic_name_map = {
-    'unlabeled': 0, 
-    'outlier': 1,
-    'car': 10,
-    'bicycle': 11,
-    'bus': 13,
-    'motorcycle': 15,
-    'on-rails': 16,
-    'truck': 18,
-    'other-vehicle': 20,
-    'person': 30,
-    'bicyclist': 31,
-    'motorcyclist': 32,
-    'road': 40,
-    'parking': 44,
-    'sidewalk': 48,
-    'other-ground': 49,
-    'building': 50,
-    'fence': 51,
-    'other-structure': 52,
-    'lane-marking': 60,
-    'vegetation': 70,
-    'trunk': 71,
-    'terrain': 72,
-    'pole': 80,
-    'traffic-sign': 81,
-    'other-object': 99,
-    'moving-car': 252,
-    'moving-bicyclist': 253,
-    'moving-person': 254,
-    'moving-motorcyclist': 255,
-    'moving-on-rails': 256,
-    'moving-bus': 257,
-    'moving-truck': 258,
-    'moving-other-vehicle': 259
-}
 def set_pcd_with_semantic_label(pcd, label, is_vis=False, cmap=None):
     """ 
     给pcd上色 via label (输入可以是list)
@@ -176,6 +103,7 @@ def set_pcd_with_semantic_label(pcd, label, is_vis=False, cmap=None):
         - if there are multiple pcd -> list of pcd
         - one pcd -> pcd
     """
+    from .others.kitti_semantic_cmap import kitti_semantic_cmap, kitti_semantic_name_map
     if not isinstance(pcd, list):
         pcd = [pcd]
         label = [label]
@@ -207,30 +135,99 @@ def set_pcd_with_semantic_label(pcd, label, is_vis=False, cmap=None):
     else:
         return pcd
 
-"""
-根据关键点及其匹配关系绘制匹配线, 返回odometry.ColaLines
-"""
-def get_corres_lines(kpts_src, kpts_dst, corres, is_show=False):
-    """
-    根据匹配关键点获得线条对象
-    kpts: (N|M, 3), ndarray
-    corres: (N, 2) int ndarray
-    return: ColaLineSets
-    """
-    num_src = len(kpts_src)
-    pts = np.vstack([kpts_src, kpts_dst])
-    lines_idxs = corres
-    lines_idxs[:, 1] += num_src
-    lines = o4d.geometry.ColaLineSet()
-    lines.cola_init_lines(pts, lines_idxs)
 
-    if is_show:
-        vis_geo_static([lines.data])
-    
+
+
+def get_lines(pts1, pts2, color=None):
+    """
+    pts1, pts2: Nx3 with same N
+    the i'th line: pts1[i] -- pts2[i]
+    """
+    pts1 = pts1.reshape(-1, 3)
+    pts2 = pts2.reshape(-1, 3)
+
+    lines = o4d.geometry.ColaLineSet()
+    pts = np.vstack([pts1, pts2])
+    indic = np.column_stack([np.arange(len(pts1)), np.arange(len(pts1)) + len(pts1)])
+    lines.cola_init_lines(points=pts, line_indices=indic)
+
+    if color is None:
+        colors_line = np.tile(np.asarray([0, 1.0, 0]), reps=(len(pts1), 1))
+    else:
+        color = np.tile(np.asarray(color), reps=(len(pts), 1))
+    lines.cola_init_colors(colors_line)
+
+
     return lines
 
 
+def get_sphere(center, radius, color):
+    # 创建一个球体几何体
+    mesh = o3d.geometry.TriangleMesh.create_sphere(radius=radius)
+    # 平移球体使其位于指定中心位置
+    mesh.translate(center)
+    # 设置球体颜色
+    mesh.paint_uniform_color(color)
+    return mesh
+
+
+def vis_corres(
+    pts_src, pts_dst, kpts_src, kpts_dst
+):
+    """
+    可视化源点和目标点即匹配关系
+    TODO: MASK 以区分 in/outlier  
+        - label_inout is a True/False array with length == len(kpts_src) == len(kpts_dst)
+            - red: inlier
+            - green: outlier
+    """
+    # pts_dst 翻转: z反向后加上一定值
+    z_delta = 30
+    pts_dst_new = pts_dst.copy()
+    # pts_dst_new[..., 2] = -pts_dst_new[..., 2]
+    pts_dst_new[..., 2] += z_delta
+
+    kpts_dst_new = kpts_dst.copy()
+    # kpts_dst_new[..., 2] = -kpts_dst_new[..., 2]
+    kpts_dst_new[..., 2] += z_delta
+
+    geo_list = [] 
+    for i in range(len(kpts_src)):
+        sp_src = get_sphere(center=kpts_src[i], radius=0.5, color=[1.0, 0, 0])
+        sp_dst = get_sphere(center=kpts_dst_new[i], radius=0.5, color=[1.0, 0, 0])
+        geo_list.append(sp_src)
+        geo_list.append(sp_dst)
+    
+    lines = o4d.geometry.ColaLineSet()
+    pts_line = np.vstack([kpts_src, kpts_dst_new])
+    line_indic = np.column_stack([np.arange(len(kpts_src)), np.arange(len(kpts_src)) + len(kpts_src) ])
+    lines.cola_init_lines(pts_line, line_indic)
+    colors_line = np.tile(np.asarray([0, 1.0, 0]), reps=(len(line_indic), 1))
+    lines.cola_init_colors(colors_line)
+
+    pcd_src = o4d.geometry.ColaPointCloud(pts_src)
+    pcd_src.paint_uniform_color(np.asarray([1, 0.706, 0])[:, None])
+    pcd_src.estimate_normals(radius=0.3)
+
+    pcd_dst = o4d.geometry.ColaPointCloud(pts_dst_new)
+    pcd_dst.paint_uniform_color(np.asarray([0, 0.651, 0.929])[:, None])
+    pcd_dst.estimate_normals(radius=0.3)
+
+    geo_list.extend([pcd_src.data, pcd_dst.data, lines.data])
+    vis_geo_static(*geo_list)
+
+
+
+def vis_two_pts(pts_src, label_src, pts_dst, label_dst):
+    pcd_src = get_pcd_coloring_with_label(pts_src, label_src)
+    pcd_dst = get_pcd_coloring_with_label(pts_dst, label_dst)
+    vis_geo_static(pcd_src, pcd_dst)
+    
+
 def vis_with_label(pts, label):
+    """
+    vis with semantic label
+    """
     pcd = get_pcd_coloring_with_label(pts, label)
     vis_geo_static(pcd)
 
